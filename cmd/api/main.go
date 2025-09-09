@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	pb "github.com/putram11/sequential-id-counter-service/api/proto"
 	"github.com/putram11/sequential-id-counter-service/internal/api/grpc"
 	"github.com/putram11/sequential-id-counter-service/internal/api/rest"
 	"github.com/putram11/sequential-id-counter-service/internal/config"
@@ -72,7 +73,7 @@ func main() {
 	}
 
 	// Create context for graceful shutdown
-	ctx, cancel := context.WithCancel(context.Background())
+	_, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
 	// Start REST API server
@@ -90,9 +91,11 @@ func main() {
 	}()
 
 	// Start gRPC server
-	grpcHandler := grpc.NewHandler(seqService, logger)
+	grpcHandler := grpc.NewServer(seqService, logger)
 	grpcServer := grpc_server.NewServer()
-	grpcHandler.RegisterService(grpcServer)
+
+	// Register our service with the gRPC server
+	pb.RegisterSequentialIDServiceServer(grpcServer, grpcHandler)
 
 	grpcListener, err := net.Listen("tcp", fmt.Sprintf(":%s", cfg.GRPCPort))
 	if err != nil {

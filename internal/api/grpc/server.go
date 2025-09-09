@@ -2,7 +2,6 @@ package grpc
 
 import (
 	"context"
-	"strconv"
 	"time"
 
 	pb "github.com/putram11/sequential-id-counter-service/api/proto"
@@ -15,7 +14,7 @@ import (
 
 // Server implements the SequentialIDServiceServer interface
 type Server struct {
-	proto.UnimplementedSequentialIDServiceServer
+	pb.UnimplementedSequentialIDServiceServer
 	sequentialIDService *service.SequentialIDService
 	logger              *logrus.Logger
 }
@@ -29,7 +28,7 @@ func NewServer(sequentialIDService *service.SequentialIDService, logger *logrus.
 }
 
 // GetNext gets the next sequential ID for a prefix
-func (s *Server) GetNext(ctx context.Context, req *proto.GetNextRequest) (*proto.GetNextResponse, error) {
+func (s *Server) GetNext(ctx context.Context, req *pb.GetNextRequest) (*pb.GetNextResponse, error) {
 	if req.Prefix == "" {
 		return nil, status.Error(codes.InvalidArgument, "prefix is required")
 	}
@@ -41,11 +40,11 @@ func (s *Server) GetNext(ctx context.Context, req *proto.GetNextRequest) (*proto
 			"client_id":      req.ClientId,
 			"correlation_id": req.CorrelationId,
 		}).Error("Failed to get next sequential ID")
-		
+
 		return nil, status.Error(codes.Internal, "failed to generate sequential ID")
 	}
 
-	return &proto.GetNextResponse{
+	return &pb.GetNextResponse{
 		FullNumber:  result.FullNumber,
 		Prefix:      result.Prefix,
 		Counter:     result.Counter,
@@ -55,16 +54,23 @@ func (s *Server) GetNext(ctx context.Context, req *proto.GetNextRequest) (*proto
 }
 
 // GetNextBatch gets a batch of sequential IDs
-func (s *Server) GetNextBatch(ctx context.Context, req *proto.GetNextBatchRequest) (*proto.GetNextBatchResponse, error) {
+func (s *Server) GetNextBatch(ctx context.Context, req *pb.GetNextBatchRequest) (*pb.GetNextBatchResponse, error) {
 	if req.Prefix == "" {
 		return nil, status.Error(codes.InvalidArgument, "prefix is required")
 	}
-	
+
 	if req.Count <= 0 || req.Count > 1000 {
 		return nil, status.Error(codes.InvalidArgument, "count must be between 1 and 1000")
 	}
 
-	result, err := s.sequentialIDService.GetNextBatch(ctx, req.Prefix, int(req.Count), req.ClientId, req.CorrelationId)
+	batchReq := &models.BatchRequest{
+		Prefix:        req.Prefix,
+		Count:         int(req.Count),
+		ClientID:      req.ClientId,
+		CorrelationID: req.CorrelationId,
+	}
+
+	result, err := s.sequentialIDService.GetNextBatch(ctx, batchReq)
 	if err != nil {
 		s.logger.WithError(err).WithFields(logrus.Fields{
 			"prefix":         req.Prefix,
@@ -72,23 +78,32 @@ func (s *Server) GetNextBatch(ctx context.Context, req *proto.GetNextBatchReques
 			"client_id":      req.ClientId,
 			"correlation_id": req.CorrelationId,
 		}).Error("Failed to get batch of sequential IDs")
-		
+
 		return nil, status.Error(codes.Internal, "failed to generate batch of sequential IDs")
 	}
 
-	return &proto.GetNextBatchResponse{
-		FullNumbers:  result.FullNumbers,
-		Prefix:       result.Prefix,
-		StartCounter: result.StartCounter,
-		EndCounter:   result.EndCounter,
+	return &pb.GetNextBatchResponse{
+		FullNumbers:  extractFullNumbers(result.IDs),
+		Prefix:       req.Prefix,
+		StartCounter: result.IDs[0].Counter,
+		EndCounter:   result.IDs[len(result.IDs)-1].Counter,
 		Count:        int32(result.Count),
 		GeneratedAt:  result.GeneratedAt.Format(time.RFC3339),
 		BatchId:      result.BatchID,
 	}, nil
 }
 
+// extractFullNumbers extracts full numbers from SequentialID slice
+func extractFullNumbers(ids []models.SequentialID) []string {
+	fullNumbers := make([]string, len(ids))
+	for i, id := range ids {
+		fullNumbers[i] = id.FullNumber
+	}
+	return fullNumbers
+}
+
 // ResetCounter resets the counter for a prefix
-func (s *Server) ResetCounter(ctx context.Context, req *proto.ResetCounterRequest) (*proto.ResetCounterResponse, error) {
+func (s *Server) ResetCounter(ctx context.Context, req *pb.ResetCounterRequest) (*pb.ResetCounterResponse, error) {
 	if req.Prefix == "" {
 		return nil, status.Error(codes.InvalidArgument, "prefix is required")
 	}
@@ -97,7 +112,14 @@ func (s *Server) ResetCounter(ctx context.Context, req *proto.ResetCounterReques
 		return nil, status.Error(codes.InvalidArgument, "new_value must be non-negative")
 	}
 
-	oldValue, err := s.sequentialIDService.ResetCounter(ctx, req.Prefix, req.NewValue, req.Reason, req.ClientId, req.CorrelationId)
+	resetReq := &models.ResetRequest{
+		SetTo:     req.NewValue,
+		Reason:    req.Reason,
+		AdminUser: req.ClientId,
+		Force:     false,
+	}
+
+	result, err := s.sequentialIDService.ResetCounter(ctx, req.Prefix, resetReq)
 	if err != nil {
 		s.logger.WithError(err).WithFields(logrus.Fields{
 			"prefix":         req.Prefix,
@@ -106,80 +128,61 @@ func (s *Server) ResetCounter(ctx context.Context, req *proto.ResetCounterReques
 			"client_id":      req.ClientId,
 			"correlation_id": req.CorrelationId,
 		}).Error("Failed to reset counter")
-		
+
 		return nil, status.Error(codes.Internal, "failed to reset counter")
 	}
 
-	return &proto.ResetCounterResponse{
-		Success:  true,
-		Message:  "Counter reset successfully",
-		OldValue: oldValue,
-		NewValue: req.NewValue,
+	return &pb.ResetCounterResponse{
+		Success:  result.Success,
+		Message:  result.Message,
+		OldValue: result.OldValue,
+		NewValue: result.NewValue,
 	}, nil
 }
 
-// GetStatus gets the status of a counter
-func (s *Server) GetStatus(ctx context.Context, req *proto.GetStatusRequest) (*proto.GetStatusResponse, error) {
+// GetStatus gets the status of a counter (simplified for compatibility)
+func (s *Server) GetStatus(ctx context.Context, req *pb.GetStatusRequest) (*pb.GetStatusResponse, error) {
 	if req.Prefix == "" {
 		return nil, status.Error(codes.InvalidArgument, "prefix is required")
 	}
 
-	status, err := s.sequentialIDService.GetStatus(ctx, req.Prefix)
+	statusResult, err := s.sequentialIDService.GetStatus(ctx, req.Prefix)
 	if err != nil {
 		s.logger.WithError(err).WithField("prefix", req.Prefix).Error("Failed to get status")
 		return nil, status.Error(codes.Internal, "failed to get counter status")
 	}
 
-	var configInfo *proto.ConfigInfo
-	if status.Config != nil {
-		configInfo = &proto.ConfigInfo{
-			Prefix:       status.Config.Prefix,
-			Format:       status.Config.Format,
-			Padding:      int32(status.Config.Padding),
-			Separator:    status.Config.Separator,
-			InitialValue: status.Config.InitialValue,
-			MaxValue:     status.Config.MaxValue,
-			IsActive:     status.Config.IsActive,
-			Description:  status.Config.Description,
-		}
-	}
-
-	return &proto.GetStatusResponse{
-		Prefix:         status.Prefix,
-		CurrentCounter: status.CurrentCounter,
-		IsActive:       status.IsActive,
-		LastGenerated:  status.LastGenerated.Format(time.RFC3339),
-		TotalGenerated: status.TotalGenerated,
-		Config:         configInfo,
+	return &pb.GetStatusResponse{
+		Prefix:         statusResult.Prefix,
+		CurrentCounter: statusResult.CurrentCounter,
+		IsActive:       true,                            // Default value since not in CounterStatus
+		LastGenerated:  time.Now().Format(time.RFC3339), // Default since not in CounterStatus
+		TotalGenerated: statusResult.LastAuditCounter,
+		Config:         nil, // Will be nil since CounterStatus doesn't include config
 	}, nil
 }
 
 // Health performs a health check
-func (s *Server) Health(ctx context.Context, req *proto.HealthRequest) (*proto.HealthResponse, error) {
-	healthy, details := s.sequentialIDService.HealthCheck(ctx)
-	
-	status := proto.HealthResponse_SERVING
+func (s *Server) Health(ctx context.Context, req *pb.HealthRequest) (*pb.HealthResponse, error) {
+	healthStatus := s.sequentialIDService.HealthCheck(ctx)
+
+	statusVal := pb.HealthResponse_SERVING
 	message := "Service is healthy"
-	
-	if !healthy {
-		status = proto.HealthResponse_NOT_SERVING
+
+	if !healthStatus.Healthy {
+		statusVal = pb.HealthResponse_NOT_SERVING
 		message = "Service is unhealthy"
 	}
 
-	detailsMap := make(map[string]string)
-	for key, value := range details {
-		detailsMap[key] = value
-	}
-
-	return &proto.HealthResponse{
-		Status:  status,
+	return &pb.HealthResponse{
+		Status:  statusVal,
 		Message: message,
-		Details: detailsMap,
+		Details: healthStatus.Components,
 	}, nil
 }
 
 // GetConfig gets the configuration for a prefix
-func (s *Server) GetConfig(ctx context.Context, req *proto.GetConfigRequest) (*proto.GetConfigResponse, error) {
+func (s *Server) GetConfig(ctx context.Context, req *pb.GetConfigRequest) (*pb.GetConfigResponse, error) {
 	if req.Prefix == "" {
 		return nil, status.Error(codes.InvalidArgument, "prefix is required")
 	}
@@ -191,28 +194,28 @@ func (s *Server) GetConfig(ctx context.Context, req *proto.GetConfigRequest) (*p
 	}
 
 	if config == nil {
-		return &proto.GetConfigResponse{
+		return &pb.GetConfigResponse{
 			Found: false,
 		}, nil
 	}
 
-	return &proto.GetConfigResponse{
-		Config: &proto.ConfigInfo{
+	return &pb.GetConfigResponse{
+		Config: &pb.ConfigInfo{
 			Prefix:       config.Prefix,
-			Format:       config.Format,
-			Padding:      int32(config.Padding),
-			Separator:    config.Separator,
-			InitialValue: config.InitialValue,
-			MaxValue:     config.MaxValue,
-			IsActive:     config.IsActive,
-			Description:  config.Description,
+			Format:       config.FormatTemplate,
+			Padding:      int32(config.PaddingLength),
+			Separator:    "",               // Not in model
+			InitialValue: 0,                // Not in model
+			MaxValue:     0,                // Not in model
+			IsActive:     true,             // Not in model
+			Description:  config.ResetRule, // Using reset rule as description
 		},
 		Found: true,
 	}, nil
 }
 
-// UpdateConfig updates the configuration for a prefix
-func (s *Server) UpdateConfig(ctx context.Context, req *proto.UpdateConfigRequest) (*proto.UpdateConfigResponse, error) {
+// UpdateConfig updates the configuration for a prefix (simplified implementation)
+func (s *Server) UpdateConfig(ctx context.Context, req *pb.UpdateConfigRequest) (*pb.UpdateConfigResponse, error) {
 	if req.Config == nil {
 		return nil, status.Error(codes.InvalidArgument, "config is required")
 	}
@@ -221,29 +224,31 @@ func (s *Server) UpdateConfig(ctx context.Context, req *proto.UpdateConfigReques
 		return nil, status.Error(codes.InvalidArgument, "prefix is required")
 	}
 
-	config := &models.PrefixConfig{
-		Prefix:       req.Config.Prefix,
-		Format:       req.Config.Format,
-		Padding:      int(req.Config.Padding),
-		Separator:    req.Config.Separator,
-		InitialValue: req.Config.InitialValue,
-		MaxValue:     req.Config.MaxValue,
-		IsActive:     req.Config.IsActive,
-		Description:  req.Config.Description,
+	updateReq := &models.ConfigUpdateRequest{
+		AdminUser:         req.ClientId,
+		CreateIfNotExists: true,
 	}
 
-	err := s.sequentialIDService.UpdateConfig(ctx, config, req.ClientId, req.CorrelationId)
+	if req.Config.Format != "" {
+		updateReq.FormatTemplate = &req.Config.Format
+	}
+	if req.Config.Padding > 0 {
+		padding := int(req.Config.Padding)
+		updateReq.PaddingLength = &padding
+	}
+
+	err := s.sequentialIDService.UpdateConfig(ctx, req.Config.Prefix, updateReq)
 	if err != nil {
 		s.logger.WithError(err).WithFields(logrus.Fields{
 			"prefix":         req.Config.Prefix,
 			"client_id":      req.ClientId,
 			"correlation_id": req.CorrelationId,
 		}).Error("Failed to update config")
-		
+
 		return nil, status.Error(codes.Internal, "failed to update configuration")
 	}
 
-	return &proto.UpdateConfigResponse{
+	return &pb.UpdateConfigResponse{
 		Success: true,
 		Message: "Configuration updated successfully",
 		Config:  req.Config,
