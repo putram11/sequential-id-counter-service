@@ -1,0 +1,68 @@
+apiVersion: v1
+kind: Secret
+metadata:
+  name: postgres-secret
+type: Opaque
+data:
+  # Base64 encoded values - replace with actual values
+  url: cG9zdGdyZXM6Ly9zZXF1c2VyOnNlcXBhc3NAcG9zdGdyZXMtc2VydmljZTo1NDMyL3NlcWRiP3NzbG1vZGU9ZGlzYWJsZQ== # postgres://sequser:seqpass@postgres-service:5432/seqdb?sslmode=disable
+  username: c2VxdXNlcg== # sequser
+  password: c2VxcGFzcw== # seqpass
+  database: c2VxZGI= # seqdb
+
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: app-secret
+type: Opaque
+data:
+  # Base64 encoded values - replace with actual values
+  jwt-secret: eW91ci1qd3Qtc2VjcmV0LWtleS1jaGFuZ2UtaW4tcHJvZHVjdGlvbg== # your-jwt-secret-key-change-in-production
+  api-key: eW91ci1hcGkta2V5LWNoYW5nZS1pbi1wcm9kdWN0aW9u # your-api-key-change-in-production
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: app-config
+data:
+  redis.conf: |
+    save 900 1
+    save 300 10
+    save 60 10000
+    appendonly yes
+    appendfsync everysec
+    auto-aof-rewrite-percentage 100
+    auto-aof-rewrite-min-size 64mb
+    maxmemory-policy noeviction
+    tcp-keepalive 60
+    timeout 0
+    
+  rabbitmq.conf: |
+    vm_memory_high_watermark.relative = 0.4
+    disk_free_limit.absolute = 1GB
+    cluster_partition_handling = autoheal
+    queue_master_locator = min-masters
+    
+  prometheus.yml: |
+    global:
+      scrape_interval: 15s
+      evaluation_interval: 15s
+    
+    rule_files:
+      # - "first_rules.yml"
+      # - "second_rules.yml"
+    
+    scrape_configs:
+      - job_name: 'sequential-id-api'
+        static_configs:
+          - targets: ['sequential-id-api-service:2112']
+        scrape_interval: 10s
+        metrics_path: /metrics
+        
+      - job_name: 'sequential-id-worker'
+        static_configs:
+          - targets: ['sequential-id-worker-service:2113']
+        scrape_interval: 10s
+        metrics_path: /metrics
