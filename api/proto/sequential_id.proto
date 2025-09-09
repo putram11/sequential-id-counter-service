@@ -1,0 +1,148 @@
+syntax = "proto3";
+
+package sequentialid;
+
+option go_package = "github.com/putram11/sequential-id-counter-service/internal/api/grpc/pb";
+
+// Sequential ID service definition
+service SequentialIDService {
+  // Get next sequential ID for a prefix
+  rpc GetNext(GetNextRequest) returns (GetNextResponse);
+  
+  // Get next batch of sequential IDs
+  rpc GetNextBatch(GetNextBatchRequest) returns (GetNextBatchResponse);
+  
+  // Reset counter for a prefix
+  rpc ResetCounter(ResetCounterRequest) returns (ResetCounterResponse);
+  
+  // Get counter status
+  rpc GetStatus(GetStatusRequest) returns (GetStatusResponse);
+  
+  // Get health status
+  rpc Health(HealthRequest) returns (HealthResponse);
+  
+  // Get configuration for a prefix
+  rpc GetConfig(GetConfigRequest) returns (GetConfigResponse);
+  
+  // Update configuration for a prefix
+  rpc UpdateConfig(UpdateConfigRequest) returns (UpdateConfigResponse);
+}
+
+// Request to get next sequential ID
+message GetNextRequest {
+  string prefix = 1;
+  string client_id = 2;
+  string correlation_id = 3;
+}
+
+// Response with next sequential ID
+message GetNextResponse {
+  string full_number = 1;
+  string prefix = 2;
+  int64 counter = 3;
+  string generated_at = 4;
+  string message_id = 5;
+}
+
+// Request to get batch of sequential IDs
+message GetNextBatchRequest {
+  string prefix = 1;
+  int32 count = 2;
+  string client_id = 3;
+  string correlation_id = 4;
+}
+
+// Response with batch of sequential IDs
+message GetNextBatchResponse {
+  repeated string full_numbers = 1;
+  string prefix = 2;
+  int64 start_counter = 3;
+  int64 end_counter = 4;
+  int32 count = 5;
+  string generated_at = 6;
+  string batch_id = 7;
+}
+
+// Request to reset counter
+message ResetCounterRequest {
+  string prefix = 1;
+  int64 new_value = 2;
+  string reason = 3;
+  string client_id = 4;
+  string correlation_id = 5;
+}
+
+// Response for reset counter
+message ResetCounterResponse {
+  bool success = 1;
+  string message = 2;
+  int64 old_value = 3;
+  int64 new_value = 4;
+}
+
+// Request to get status
+message GetStatusRequest {
+  string prefix = 1;
+}
+
+// Response with status information
+message GetStatusResponse {
+  string prefix = 1;
+  int64 current_counter = 2;
+  bool is_active = 3;
+  string last_generated = 4;
+  int64 total_generated = 5;
+  ConfigInfo config = 6;
+}
+
+// Configuration information
+message ConfigInfo {
+  string prefix = 1;
+  string format = 2;
+  int32 padding = 3;
+  string separator = 4;
+  int64 initial_value = 5;
+  int64 max_value = 6;
+  bool is_active = 7;
+  string description = 8;
+}
+
+// Health check request
+message HealthRequest {}
+
+// Health check response
+message HealthResponse {
+  enum Status {
+    SERVING = 0;
+    NOT_SERVING = 1;
+    SERVICE_UNKNOWN = 2;
+  }
+  Status status = 1;
+  string message = 2;
+  map<string, string> details = 3;
+}
+
+// Request to get configuration
+message GetConfigRequest {
+  string prefix = 1;
+}
+
+// Response with configuration
+message GetConfigResponse {
+  ConfigInfo config = 1;
+  bool found = 2;
+}
+
+// Request to update configuration
+message UpdateConfigRequest {
+  ConfigInfo config = 1;
+  string client_id = 2;
+  string correlation_id = 3;
+}
+
+// Response for update configuration
+message UpdateConfigResponse {
+  bool success = 1;
+  string message = 2;
+  ConfigInfo config = 3;
+}

@@ -16,8 +16,11 @@ RUN go mod download
 # Copy source code
 COPY . .
 
-# Build the application
-RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-w -s" -o bin/sequential-id-service cmd/api/main.go
+# Build the API service
+RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-w -s" -o bin/api cmd/api/main.go
+
+# Build the worker service
+RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-w -s" -o bin/worker cmd/worker/main.go
 
 # Final stage
 FROM alpine:latest
@@ -31,8 +34,9 @@ RUN addgroup -g 1001 -S appuser && \
 
 WORKDIR /app
 
-# Copy binary from builder stage
-COPY --from=builder /app/bin/sequential-id-service .
+# Copy binaries from builder stage
+COPY --from=builder /app/bin/api .
+COPY --from=builder /app/bin/worker .
 
 # Copy configuration files if any
 COPY --from=builder /app/config ./config
