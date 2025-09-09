@@ -5,7 +5,7 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/putram11/sequential-id-counter-service/api/proto"
+	pb "github.com/putram11/sequential-id-counter-service/api/proto"
 	"github.com/putram11/sequential-id-counter-service/internal/models"
 	"github.com/putram11/sequential-id-counter-service/internal/service"
 	"github.com/sirupsen/logrus"

@@ -272,7 +272,8 @@ func (r *RabbitMQRepository) GetStats() map[string]interface{} {
 
 	if !r.conn.IsClosed() {
 		stats["local_addr"] = r.conn.LocalAddr().String()
-		stats["remote_addr"] = r.conn.RemoteAddr().String()
+		// Note: RemoteAddr() is not available in streadway/amqp
+		// stats["remote_addr"] = r.conn.RemoteAddr().String()
 	}
 
 	return stats
