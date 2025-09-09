@@ -1,0 +1,111 @@
+# Configuration files
+config/
+!config/example.yml
+
+# Build artifacts
+bin/
+build/
+dist/
+
+# Go specific
+vendor/
+*.so
+*.dylib
+*.dll
+*.exe
+*.test
+*.out
+coverage.html
+coverage.out
+*.prof
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Environment files
+.env
+.env.local
+.env.development
+.env.test
+.env.production
+
+# Logs
+*.log
+logs/
+
+# Database files
+*.db
+*.sqlite
+*.sqlite3
+
+# Docker
+.dockerignore
+
+# Kubernetes
+*.kubeconfig
+
+# Terraform
+*.tfstate
+*.tfstate.*
+.terraform/
+.terraform.lock.hcl
+
+# Backup files
+*.bak
+*.backup
+*.tmp
+
+# Generated files
+docs/swagger.json
+docs/swagger.yaml
+pkg/proto/*.pb.go
+
+# Local development
+.local/
+tmp/
+temp/
+
+# Test coverage
+profile.cov
+coverage.txt
+
+# Air (live reload)
+.air.toml
+tmp/
+
+# Delve debugger
+__debug_bin
+
+# GoReleaser
+.goreleaser.yml
+dist/
+
+# Dependencies
+go.sum
+
+# Local overrides
+docker-compose.override.yml
+.env.override
+
+# Certificates and keys
+*.pem
+*.key
+*.crt
+*.p12
+*.pfx
+
+# Migration rollback files
+*.rollback.sql
