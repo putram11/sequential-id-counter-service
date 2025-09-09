@@ -1,0 +1,166 @@
+syntax = "proto3";
+
+package sequential_id;
+option go_package = "github.com/putram11/sequential-id-counter-service/pkg/proto";
+
+// Sequential ID Service provides atomic, scalable ID generation
+service SequentialIDService {
+  // Generate next sequential ID for a given prefix
+  rpc GetNext(GetNextRequest) returns (GetNextResponse);
+  
+  // Get current status of a counter
+  rpc GetStatus(GetStatusRequest) returns (GetStatusResponse);
+  
+  // Reset counter to a specific value (admin only)
+  rpc ResetCounter(ResetCounterRequest) returns (ResetCounterResponse);
+  
+  // Update configuration for a prefix (admin only)
+  rpc UpdateConfig(UpdateConfigRequest) returns (UpdateConfigResponse);
+  
+  // Get configuration for a prefix
+  rpc GetConfig(GetConfigRequest) returns (GetConfigResponse);
+  
+  // Health check endpoint
+  rpc HealthCheck(HealthCheckRequest) returns (HealthCheckResponse);
+  
+  // Batch generate multiple IDs
+  rpc GetNextBatch(GetNextBatchRequest) returns (GetNextBatchResponse);
+}
+
+// Request to generate next sequential ID
+message GetNextRequest {
+  string prefix = 1;          // Required: prefix identifier (e.g., "SG", "INV")
+  string client_id = 2;       // Optional: client system identifier
+  string generated_by = 3;    // Optional: user/system that requested the ID
+  string correlation_id = 4;  // Optional: request correlation ID
+}
+
+// Response containing the generated ID
+message GetNextResponse {
+  string full_number = 1;     // Complete formatted ID (e.g., "SG000001")
+  int64 counter = 2;          // Numeric counter value
+  string prefix = 3;          // Prefix used
+  string message_id = 4;      // Unique message identifier
+  int64 generated_at = 5;     // Unix timestamp when generated
+}
+
+// Request to get counter status
+message GetStatusRequest {
+  string prefix = 1;          // Required: prefix to check
+}
+
+// Response with counter status information
+message GetStatusResponse {
+  int64 current_counter = 1;   // Current counter value in Redis
+  int64 next_counter = 2;      // Next value that will be generated
+  string prefix = 3;           // Prefix checked
+  bool redis_healthy = 4;      // Redis connection status
+  bool queue_healthy = 5;      // RabbitMQ connection status
+  bool db_healthy = 6;         // Database connection status
+  int64 last_audit_counter = 7; // Last counter value in audit log
+}
+
+// Request to reset a counter
+message ResetCounterRequest {
+  string prefix = 1;          // Required: prefix to reset
+  int64 set_to = 2;           // Required: new counter value
+  string reason = 3;          // Required: reason for reset
+  string admin_user = 4;      // Required: admin user performing reset
+  bool force = 5;             // Force reset even if risky
+}
+
+// Response for counter reset operation
+message ResetCounterResponse {
+  bool success = 1;           // Whether reset was successful
+  string message = 2;         // Result message or error details
+  int64 old_value = 3;        // Previous counter value
+  int64 new_value = 4;        // New counter value after reset
+  string reset_id = 5;        // Unique identifier for this reset operation
+}
+
+// Request to update prefix configuration
+message UpdateConfigRequest {
+  string prefix = 1;              // Required: prefix to update
+  int32 padding_length = 2;       // Number padding length (e.g., 6 for 000001)
+  string format_template = 3;     // Format template (e.g., "%s%06d")
+  string reset_rule = 4;          // Reset rule: never/daily/monthly/yearly
+  string admin_user = 5;          // Admin user making the change
+  bool create_if_not_exists = 6;  // Create prefix if it doesn't exist
+}
+
+// Response for configuration update
+message UpdateConfigResponse {
+  bool success = 1;           // Whether update was successful
+  string message = 2;         // Result message or error details
+  PrefixConfig old_config = 3; // Previous configuration
+  PrefixConfig new_config = 4; // New configuration
+}
+
+// Request to get prefix configuration
+message GetConfigRequest {
+  string prefix = 1;          // Required: prefix to get config for
+}
+
+// Response with prefix configuration
+message GetConfigResponse {
+  PrefixConfig config = 1;    // Configuration details
+  bool exists = 2;            // Whether prefix exists
+}
+
+// Configuration for a prefix
+message PrefixConfig {
+  string prefix = 1;              // Prefix identifier
+  int32 padding_length = 2;       // Number padding length
+  string format_template = 3;     // Format template
+  string reset_rule = 4;          // Reset rule
+  int64 last_reset_at = 5;        // Unix timestamp of last reset
+  int64 created_at = 6;           // Unix timestamp when created
+  int64 updated_at = 7;           // Unix timestamp when last updated
+}
+
+// Health check request
+message HealthCheckRequest {
+  string service = 1;         // Optional: specific service to check
+}
+
+// Health check response
+message HealthCheckResponse {
+  enum ServingStatus {
+    UNKNOWN = 0;
+    SERVING = 1;
+    NOT_SERVING = 2;
+    SERVICE_UNKNOWN = 3;
+  }
+  ServingStatus status = 1;
+  map<string, string> details = 2; // Additional health details
+}
+
+// Request for batch ID generation
+message GetNextBatchRequest {
+  string prefix = 1;          // Required: prefix identifier
+  int32 count = 2;            // Required: number of IDs to generate (max 1000)
+  string client_id = 3;       // Optional: client system identifier
+  string generated_by = 4;    // Optional: user/system that requested the IDs
+  string correlation_id = 5;  // Optional: request correlation ID
+}
+
+// Response with batch of generated IDs
+message GetNextBatchResponse {
+  repeated BatchID ids = 1;   // Generated IDs
+  string batch_id = 2;        // Unique batch identifier
+  int32 count = 3;            // Number of IDs generated
+  int64 generated_at = 4;     // Unix timestamp when generated
+}
+
+// Individual ID in a batch
+message BatchID {
+  string full_number = 1;     // Complete formatted ID
+  int64 counter = 2;          // Numeric counter value
+}
+
+// Error details for failed operations
+message ErrorDetail {
+  string code = 1;            // Error code
+  string message = 2;         // Error message
+  map<string, string> metadata = 3; // Additional error context
+}
