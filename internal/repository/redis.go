@@ -18,7 +18,7 @@ type RedisRepository struct {
 // NewRedisRepository creates a new Redis repository
 func NewRedisRepository(cfg config.RedisConfig) (*RedisRepository, error) {
 	var client redis.UniversalClient
-	
+
 	if cfg.ClusterMode {
 		// Parse cluster nodes from URL (simplified)
 		client = redis.NewClusterClient(&redis.ClusterOptions{
@@ -30,23 +30,23 @@ func NewRedisRepository(cfg config.RedisConfig) (*RedisRepository, error) {
 		if err != nil {
 			return nil, fmt.Errorf("failed to parse Redis URL: %w", err)
 		}
-		
+
 		if cfg.Password != "" {
 			opt.Password = cfg.Password
 		}
 		opt.DB = cfg.DB
-		
+
 		client = redis.NewClient(opt)
 	}
-	
+
 	// Test connection
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	
+
 	if err := client.Ping(ctx).Err(); err != nil {
 		return nil, fmt.Errorf("failed to connect to Redis: %w", err)
 	}
-	
+
 	return &RedisRepository{
 		client: client,
 	}, nil
@@ -72,12 +72,12 @@ func (r *RedisRepository) GetCounter(ctx context.Context, prefix string) (int64,
 	if err != nil {
 		return 0, fmt.Errorf("failed to get counter for prefix %s: %w", prefix, err)
 	}
-	
+
 	counter, err := strconv.ParseInt(result, 10, 64)
 	if err != nil {
 		return 0, fmt.Errorf("failed to parse counter value: %w", err)
 	}
-	
+
 	return counter, nil
 }
 
@@ -106,25 +106,25 @@ func (r *RedisRepository) GetMultipleCounters(ctx context.Context, prefixes []st
 	if len(prefixes) == 0 {
 		return make(map[string]int64), nil
 	}
-	
+
 	// Prepare keys
 	keys := make([]string, len(prefixes))
 	for i, prefix := range prefixes {
 		keys[i] = r.counterKey(prefix)
 	}
-	
+
 	// Use pipeline for efficiency
 	pipe := r.client.Pipeline()
 	cmds := make([]*redis.StringCmd, len(keys))
 	for i, key := range keys {
 		cmds[i] = pipe.Get(ctx, key)
 	}
-	
+
 	_, err := pipe.Exec(ctx)
 	if err != nil && err != redis.Nil {
 		return nil, fmt.Errorf("failed to get multiple counters: %w", err)
 	}
-	
+
 	// Parse results
 	result := make(map[string]int64)
 	for i, cmd := range cmds {
@@ -141,7 +141,7 @@ func (r *RedisRepository) GetMultipleCounters(ctx context.Context, prefixes []st
 			result[prefixes[i]] = counter
 		}
 	}
-	
+
 	return result, nil
 }
 
@@ -163,7 +163,7 @@ func (r *RedisRepository) counterKey(prefix string) string {
 // ResetCounter resets a counter to a specific value (used for admin operations)
 func (r *RedisRepository) ResetCounter(ctx context.Context, prefix string, newValue int64) (int64, error) {
 	key := r.counterKey(prefix)
-	
+
 	// Use a transaction to get old value and set new value atomically
 	var oldValue int64
 	err := r.client.Watch(ctx, func(tx *redis.Tx) error {
@@ -179,7 +179,7 @@ func (r *RedisRepository) ResetCounter(ctx context.Context, prefix string, newVa
 				return err
 			}
 		}
-		
+
 		// Set new value
 		_, err = tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
 			pipe.Set(ctx, key, newValue, 0)
@@ -187,11 +187,11 @@ func (r *RedisRepository) ResetCounter(ctx context.Context, prefix string, newVa
 		})
 		return err
 	}, key)
-	
+
 	if err != nil {
 		return 0, fmt.Errorf("failed to reset counter for prefix %s: %w", prefix, err)
 	}
-	
+
 	return oldValue, nil
 }
 
@@ -201,10 +201,10 @@ func (r *RedisRepository) GetInfo(ctx context.Context) (map[string]string, error
 	if err != nil {
 		return nil, fmt.Errorf("failed to get Redis info: %w", err)
 	}
-	
+
 	// Parse info string into map (simplified)
 	result := make(map[string]string)
 	result["raw_info"] = info
-	
+
 	return result, nil
 }

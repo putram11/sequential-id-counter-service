@@ -43,17 +43,17 @@ func (h *Handler) GetNext(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "prefix is required"})
 		return
 	}
-	
+
 	clientID := c.Query("client_id")
 	generatedBy := c.Query("generated_by")
-	
+
 	seqID, err := h.service.GetNext(c.Request.Context(), prefix, clientID, generatedBy)
 	if err != nil {
 		h.logger.WithError(err).WithField("prefix", prefix).Error("Failed to generate sequential ID")
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
-	
+
 	c.JSON(http.StatusOK, seqID)
 }
 
@@ -75,22 +75,22 @@ func (h *Handler) GetNextBatch(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "prefix is required"})
 		return
 	}
-	
+
 	var req models.BatchRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	
+
 	req.Prefix = prefix // Override with path parameter
-	
+
 	resp, err := h.service.GetNextBatch(c.Request.Context(), &req)
 	if err != nil {
 		h.logger.WithError(err).WithField("prefix", prefix).Error("Failed to generate batch of sequential IDs")
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
-	
+
 	c.JSON(http.StatusOK, resp)
 }
 
@@ -111,14 +111,14 @@ func (h *Handler) GetStatus(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "prefix is required"})
 		return
 	}
-	
+
 	status, err := h.service.GetStatus(c.Request.Context(), prefix)
 	if err != nil {
 		h.logger.WithError(err).WithField("prefix", prefix).Error("Failed to get counter status")
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
-	
+
 	c.JSON(http.StatusOK, status)
 }
 
@@ -143,13 +143,13 @@ func (h *Handler) ResetCounter(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "prefix is required"})
 		return
 	}
-	
+
 	var req models.ResetRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	
+
 	resp, err := h.service.ResetCounter(c.Request.Context(), prefix, &req)
 	if err != nil {
 		h.logger.WithError(err).WithFields(logrus.Fields{
@@ -160,7 +160,7 @@ func (h *Handler) ResetCounter(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
-	
+
 	c.JSON(http.StatusOK, resp)
 }
 
@@ -182,19 +182,19 @@ func (h *Handler) GetConfig(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "prefix is required"})
 		return
 	}
-	
+
 	config, err := h.service.GetConfig(c.Request.Context(), prefix)
 	if err != nil {
 		h.logger.WithError(err).WithField("prefix", prefix).Error("Failed to get prefix config")
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
-	
+
 	if config == nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "prefix not found"})
 		return
 	}
-	
+
 	c.JSON(http.StatusOK, config)
 }
 
@@ -219,13 +219,13 @@ func (h *Handler) UpdateConfig(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "prefix is required"})
 		return
 	}
-	
+
 	var req models.ConfigUpdateRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	
+
 	err := h.service.UpdateConfig(c.Request.Context(), prefix, &req)
 	if err != nil {
 		h.logger.WithError(err).WithFields(logrus.Fields{
@@ -235,7 +235,7 @@ func (h *Handler) UpdateConfig(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
-	
+
 	c.JSON(http.StatusOK, gin.H{"message": "configuration updated successfully"})
 }
 
@@ -258,21 +258,21 @@ func (h *Handler) GetAuditLogs(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "prefix is required"})
 		return
 	}
-	
+
 	limit := 100
 	if limitStr := c.Query("limit"); limitStr != "" {
 		if parsedLimit, err := strconv.Atoi(limitStr); err == nil && parsedLimit > 0 && parsedLimit <= 1000 {
 			limit = parsedLimit
 		}
 	}
-	
+
 	offset := 0
 	if offsetStr := c.Query("offset"); offsetStr != "" {
 		if parsedOffset, err := strconv.Atoi(offsetStr); err == nil && parsedOffset >= 0 {
 			offset = parsedOffset
 		}
 	}
-	
+
 	// This would require implementing GetAuditLogs in the service
 	// For now, return a placeholder response
 	c.JSON(http.StatusOK, gin.H{
@@ -294,7 +294,7 @@ func (h *Handler) GetAuditLogs(c *gin.Context) {
 // @Router /health [get]
 func (h *Handler) HealthCheck(c *gin.Context) {
 	health := h.service.HealthCheck(c.Request.Context())
-	
+
 	if health.Healthy {
 		c.JSON(http.StatusOK, health)
 	} else {

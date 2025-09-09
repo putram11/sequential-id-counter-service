@@ -25,13 +25,13 @@ func NewRabbitMQRepository(cfg config.RabbitMQConfig) (*RabbitMQRepository, erro
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect to RabbitMQ: %w", err)
 	}
-	
+
 	channel, err := conn.Channel()
 	if err != nil {
 		conn.Close()
 		return nil, fmt.Errorf("failed to open channel: %w", err)
 	}
-	
+
 	// Declare exchange
 	err = channel.ExchangeDeclare(
 		cfg.Exchange, // name
@@ -47,7 +47,7 @@ func NewRabbitMQRepository(cfg config.RabbitMQConfig) (*RabbitMQRepository, erro
 		conn.Close()
 		return nil, fmt.Errorf("failed to declare exchange: %w", err)
 	}
-	
+
 	// Declare queue
 	_, err = channel.QueueDeclare(
 		cfg.Queue, // name
@@ -66,7 +66,7 @@ func NewRabbitMQRepository(cfg config.RabbitMQConfig) (*RabbitMQRepository, erro
 		conn.Close()
 		return nil, fmt.Errorf("failed to declare queue: %w", err)
 	}
-	
+
 	// Declare dead letter queue
 	_, err = channel.QueueDeclare(
 		cfg.Queue+"_dlq", // name
@@ -81,7 +81,7 @@ func NewRabbitMQRepository(cfg config.RabbitMQConfig) (*RabbitMQRepository, erro
 		conn.Close()
 		return nil, fmt.Errorf("failed to declare dead letter queue: %w", err)
 	}
-	
+
 	// Bind queue to exchange
 	err = channel.QueueBind(
 		cfg.Queue,    // queue name
@@ -95,7 +95,7 @@ func NewRabbitMQRepository(cfg config.RabbitMQConfig) (*RabbitMQRepository, erro
 		conn.Close()
 		return nil, fmt.Errorf("failed to bind queue: %w", err)
 	}
-	
+
 	return &RabbitMQRepository{
 		conn:         conn,
 		channel:      channel,
@@ -108,13 +108,13 @@ func NewRabbitMQRepository(cfg config.RabbitMQConfig) (*RabbitMQRepository, erro
 func (r *RabbitMQRepository) PublishEvent(ctx context.Context, event *models.Event) error {
 	// Set published timestamp
 	event.PublishedAt = time.Now()
-	
+
 	// Marshal event to JSON
 	body, err := json.Marshal(event)
 	if err != nil {
 		return fmt.Errorf("failed to marshal event: %w", err)
 	}
-	
+
 	// Publish message
 	err = r.channel.Publish(
 		r.exchangeName, // exchange
@@ -135,11 +135,11 @@ func (r *RabbitMQRepository) PublishEvent(ctx context.Context, event *models.Eve
 			},
 		},
 	)
-	
+
 	if err != nil {
 		return fmt.Errorf("failed to publish event: %w", err)
 	}
-	
+
 	return nil
 }
 
@@ -154,7 +154,7 @@ func (r *RabbitMQRepository) ConsumeEvents(ctx context.Context, handler func(*mo
 	if err != nil {
 		return fmt.Errorf("failed to set QoS: %w", err)
 	}
-	
+
 	// Start consuming
 	msgs, err := r.channel.Consume(
 		r.queueName, // queue
@@ -168,7 +168,7 @@ func (r *RabbitMQRepository) ConsumeEvents(ctx context.Context, handler func(*mo
 	if err != nil {
 		return fmt.Errorf("failed to register consumer: %w", err)
 	}
-	
+
 	// Process messages
 	for {
 		select {
@@ -178,19 +178,19 @@ func (r *RabbitMQRepository) ConsumeEvents(ctx context.Context, handler func(*mo
 			if !ok {
 				return fmt.Errorf("channel closed")
 			}
-			
+
 			// Parse event
 			var event models.Event
 			if err := json.Unmarshal(msg.Body, &event); err != nil {
 				msg.Nack(false, false) // Send to DLQ
 				continue
 			}
-			
+
 			// Handle event
 			if err := handler(&event); err != nil {
 				// Increment retry count
 				event.RetryCount++
-				
+
 				// If retry count exceeds limit, reject to DLQ
 				if event.RetryCount >= 3 {
 					msg.Nack(false, false)
@@ -200,7 +200,7 @@ func (r *RabbitMQRepository) ConsumeEvents(ctx context.Context, handler func(*mo
 				}
 				continue
 			}
-			
+
 			// Acknowledge successful processing
 			msg.Ack(false)
 		}
@@ -213,13 +213,13 @@ func (r *RabbitMQRepository) GetQueueInfo(ctx context.Context) (map[string]inter
 	if err != nil {
 		return nil, fmt.Errorf("failed to inspect queue: %w", err)
 	}
-	
+
 	info := map[string]interface{}{
 		"name":      queue.Name,
 		"messages":  queue.Messages,
 		"consumers": queue.Consumers,
 	}
-	
+
 	return info, nil
 }
 
@@ -228,7 +228,7 @@ func (r *RabbitMQRepository) Ping(ctx context.Context) error {
 	if r.conn.IsClosed() {
 		return fmt.Errorf("connection is closed")
 	}
-	
+
 	// Try to declare a temporary queue to test connectivity
 	tempQueue := fmt.Sprintf("health_check_%d", time.Now().UnixNano())
 	_, err := r.channel.QueueDeclare(
@@ -242,14 +242,14 @@ func (r *RabbitMQRepository) Ping(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("health check failed: %w", err)
 	}
-	
+
 	// Clean up
 	_, err = r.channel.QueueDelete(tempQueue, false, false, false)
 	if err != nil {
 		// Log but don't fail health check
 		fmt.Printf("Warning: failed to clean up health check queue: %v\n", err)
 	}
-	
+
 	return nil
 }
 
@@ -269,11 +269,11 @@ func (r *RabbitMQRepository) GetStats() map[string]interface{} {
 	stats := map[string]interface{}{
 		"connection_closed": r.conn.IsClosed(),
 	}
-	
+
 	if !r.conn.IsClosed() {
 		stats["local_addr"] = r.conn.LocalAddr().String()
 		stats["remote_addr"] = r.conn.RemoteAddr().String()
 	}
-	
+
 	return stats
 }

@@ -23,17 +23,17 @@ func NewPostgresRepository(cfg config.DatabaseConfig) (*PostgresRepository, erro
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect to database: %w", err)
 	}
-	
+
 	// Configure connection pool
 	db.SetMaxOpenConns(cfg.MaxOpenConns)
 	db.SetMaxIdleConns(cfg.MaxIdleConns)
 	db.SetConnMaxLifetime(time.Hour)
-	
+
 	// Test connection
 	if err := db.Ping(); err != nil {
 		return nil, fmt.Errorf("failed to ping database: %w", err)
 	}
-	
+
 	return &PostgresRepository{
 		db: db,
 	}, nil
@@ -48,7 +48,7 @@ func (r *PostgresRepository) GetPrefixConfig(ctx context.Context, prefix string)
 		FROM seq_config 
 		WHERE prefix = $1
 	`
-	
+
 	err := r.db.GetContext(ctx, &config, query, prefix)
 	if err == sql.ErrNoRows {
 		return nil, nil // Not found
@@ -56,7 +56,7 @@ func (r *PostgresRepository) GetPrefixConfig(ctx context.Context, prefix string)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get prefix config for %s: %w", prefix, err)
 	}
-	
+
 	return &config, nil
 }
 
@@ -67,7 +67,7 @@ func (r *PostgresRepository) CreatePrefixConfig(ctx context.Context, config *mod
 		VALUES ($1, $2, $3, $4, $5)
 		RETURNING id, created_at, updated_at
 	`
-	
+
 	err := r.db.QueryRowContext(ctx, query,
 		config.Prefix,
 		config.PaddingLength,
@@ -75,11 +75,11 @@ func (r *PostgresRepository) CreatePrefixConfig(ctx context.Context, config *mod
 		config.ResetRule,
 		config.CreatedBy,
 	).Scan(&config.ID, &config.CreatedAt, &config.UpdatedAt)
-	
+
 	if err != nil {
 		return fmt.Errorf("failed to create prefix config: %w", err)
 	}
-	
+
 	return nil
 }
 
@@ -89,44 +89,44 @@ func (r *PostgresRepository) UpdatePrefixConfig(ctx context.Context, prefix stri
 	setParts := []string{}
 	args := []interface{}{}
 	argIndex := 1
-	
+
 	for field, value := range updates {
 		setParts = append(setParts, fmt.Sprintf("%s = $%d", field, argIndex))
 		args = append(args, value)
 		argIndex++
 	}
-	
+
 	// Always update the updated_at field
 	setParts = append(setParts, fmt.Sprintf("updated_at = $%d", argIndex))
 	args = append(args, time.Now())
 	argIndex++
-	
+
 	// Add WHERE clause
 	args = append(args, prefix)
-	
+
 	query := fmt.Sprintf(`
 		UPDATE seq_config 
 		SET %s
 		WHERE prefix = $%d
-	`, 
+	`,
 		fmt.Sprintf("%s", setParts),
 		argIndex,
 	)
-	
+
 	result, err := r.db.ExecContext(ctx, query, args...)
 	if err != nil {
 		return fmt.Errorf("failed to update prefix config: %w", err)
 	}
-	
+
 	rowsAffected, err := result.RowsAffected()
 	if err != nil {
 		return fmt.Errorf("failed to check affected rows: %w", err)
 	}
-	
+
 	if rowsAffected == 0 {
 		return fmt.Errorf("prefix %s not found", prefix)
 	}
-	
+
 	return nil
 }
 
@@ -139,12 +139,12 @@ func (r *PostgresRepository) GetAllPrefixConfigs(ctx context.Context) ([]models.
 		FROM seq_config
 		ORDER BY prefix
 	`
-	
+
 	err := r.db.SelectContext(ctx, &configs, query)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get all prefix configs: %w", err)
 	}
-	
+
 	return configs, nil
 }
 
@@ -157,7 +157,7 @@ func (r *PostgresRepository) InsertAuditLog(ctx context.Context, log *models.Aud
 		ON CONFLICT (prefix, counter_value) DO NOTHING
 		RETURNING id, inserted_at
 	`
-	
+
 	err := r.db.QueryRowContext(ctx, query,
 		log.Prefix,
 		log.CounterValue,
@@ -170,7 +170,7 @@ func (r *PostgresRepository) InsertAuditLog(ctx context.Context, log *models.Aud
 		log.PublishedAt,
 		log.BatchID,
 	).Scan(&log.ID, &log.InsertedAt)
-	
+
 	if err != nil {
 		// Check if it's a conflict (duplicate)
 		if err == sql.ErrNoRows {
@@ -179,7 +179,7 @@ func (r *PostgresRepository) InsertAuditLog(ctx context.Context, log *models.Aud
 		}
 		return fmt.Errorf("failed to insert audit log: %w", err)
 	}
-	
+
 	return nil
 }
 
@@ -191,16 +191,16 @@ func (r *PostgresRepository) GetMaxCounter(ctx context.Context, prefix string) (
 		FROM seq_log
 		WHERE prefix = $1
 	`
-	
+
 	err := r.db.QueryRowContext(ctx, query, prefix).Scan(&maxCounter)
 	if err != nil {
 		return 0, fmt.Errorf("failed to get max counter for prefix %s: %w", prefix, err)
 	}
-	
+
 	if !maxCounter.Valid {
 		return 0, nil // No records found
 	}
-	
+
 	return maxCounter.Int64, nil
 }
 
@@ -215,17 +215,17 @@ func (r *PostgresRepository) UpdateCheckpoint(ctx context.Context, checkpoint *m
 			synced_at = NOW(),
 			synced_by = EXCLUDED.synced_by
 	`
-	
+
 	_, err := r.db.ExecContext(ctx, query,
 		checkpoint.Prefix,
 		checkpoint.LastCounterSynced,
 		checkpoint.SyncedBy,
 	)
-	
+
 	if err != nil {
 		return fmt.Errorf("failed to update checkpoint: %w", err)
 	}
-	
+
 	return nil
 }
 
@@ -237,7 +237,7 @@ func (r *PostgresRepository) GetCheckpoint(ctx context.Context, prefix string) (
 		FROM seq_checkpoint
 		WHERE prefix = $1
 	`
-	
+
 	err := r.db.GetContext(ctx, &checkpoint, query, prefix)
 	if err == sql.ErrNoRows {
 		return nil, nil // Not found
@@ -245,7 +245,7 @@ func (r *PostgresRepository) GetCheckpoint(ctx context.Context, prefix string) (
 	if err != nil {
 		return nil, fmt.Errorf("failed to get checkpoint for prefix %s: %w", prefix, err)
 	}
-	
+
 	return &checkpoint, nil
 }
 
@@ -256,7 +256,7 @@ func (r *PostgresRepository) InsertResetLog(ctx context.Context, resetLog *model
 		VALUES ($1, $2, $3, $4, $5, $6)
 		RETURNING id, reset_at
 	`
-	
+
 	err := r.db.QueryRowContext(ctx, query,
 		resetLog.Prefix,
 		resetLog.OldValue,
@@ -265,11 +265,11 @@ func (r *PostgresRepository) InsertResetLog(ctx context.Context, resetLog *model
 		resetLog.AdminUser,
 		resetLog.ResetID,
 	).Scan(&resetLog.ID, &resetLog.ResetAt)
-	
+
 	if err != nil {
 		return fmt.Errorf("failed to insert reset log: %w", err)
 	}
-	
+
 	return nil
 }
 
@@ -284,12 +284,12 @@ func (r *PostgresRepository) GetAuditLogs(ctx context.Context, prefix string, li
 		ORDER BY counter_value DESC
 		LIMIT $2 OFFSET $3
 	`
-	
+
 	err := r.db.SelectContext(ctx, &logs, query, prefix, limit, offset)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get audit logs for prefix %s: %w", prefix, err)
 	}
-	
+
 	return logs, nil
 }
 
